@@ -265,3 +265,10 @@ svg.chart .ref { stroke: var(--muted); stroke-dasharray: 4 4; }
   .foot-inner { grid-template-columns: 1fr 1fr; }
   .foot-brand { grid-column: 1 / -1; }
 }
+/* matchup labels and overall column */
+.matrix th.col { vertical-align: bottom; }
+.matrix th.col .pips { display: flex; justify-content: center; margin-bottom: 3px; }
+.matrix th.col > span:last-child { display: block; }
+.matrix .rowlab { display: inline-flex; align-items: center; gap: 6px; }
+.matrix td.overall { background: var(--panel-2); font-weight: 700; cursor: default; border-left: 2px solid var(--accent); }
+.matrix th.overall-h { color: var(--accent); }

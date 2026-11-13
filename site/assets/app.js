@@ -387,8 +387,16 @@
       const c = t >= 0 ? "var(--good)" : "var(--bad)";
       return `background: color-mix(in srgb, ${c} ${Math.round(Math.abs(t) * 70)}%, var(--panel-2))`;
     };
-    const head = h("tr", null, h("th"), order.map((j) => h("th", { tip: slashName(md.decks[j]) }, shortName(md.decks[j]))));
-    const body = order.map((i) => h("tr", null, h("th", { class: "row", tip: slashName(md.decks[i]) }, shortName(md.decks[i])),
+    const pipsOf = (name) => h("span", { class: "pips", "aria-hidden": "true" }, (inksOf(name).length ? inksOf(name) : ["unknown"]).map((ink) => h("i", { class: "pip", style: `background:var(--${ink})` })));
+    const overall = (i) => {
+      const r = st[i];
+      if (!r.n) return h("td", { class: "overall muted" }, "—");
+      return h("td", { class: `overall ${tone(r.wr, r.n)}`, tip: `${slashName(md.decks[i])} overall\n${r.w}–${r.l}–${r.d} in non-mirror matches (${pct(r.wr)})\n95% range ${r.ci[0].toFixed(0)}–${r.ci[1].toFixed(0)}%` },
+        `${r.wr.toFixed(1)}%`, h("span", { class: "n" }, num(r.n)));
+    };
+    const head = h("tr", null, h("th"), order.map((j) => h("th", { class: "col", tip: slashName(md.decks[j]) }, pipsOf(md.decks[j]), h("span", null, shortName(md.decks[j])))),
+      h("th", { class: "col overall-h", tip: "Overall\nMatch win rate against every pairing, mirrors left out" }, "Overall"));
+    const body = order.map((i) => h("tr", null, h("th", { class: "row", tip: slashName(md.decks[i]) }, h("span", { class: "rowlab" }, pipsOf(md.decks[i]), shortName(md.decks[i]))),
       order.map((j) => {
         if (i === j) return h("td", { class: "mirror", "aria-label": "Mirror", tip: `${slashName(md.decks[i])} mirror\n${st[i].mir} matches` });
         const x = mu.get(i + ":" + j);
@@ -400,7 +408,7 @@
           tip: `${slashName(md.decks[i])} vs ${slashName(md.decks[j])}\n${x.w}–${x.l} in matches (${pct(wr)})\nGames ${x.gw}–${x.gl}\n95% range ${ci[0].toFixed(0)}–${ci[1].toFixed(0)}%`,
           onclick: () => setQ({ cell: `${i}:${j}` }),
         }, `${wr.toFixed(0)}%`, h("span", { class: "n" }, n));
-      })));
+      }), overall(i)));
     return h("div", { class: "section" },
       h("div", { class: "controls" }, scopeControl(md, q),
         seg("Pairings shown", [[6, "Top 6"], [8, "Top 8"], [10, "Top 10"], [14, "Top 14"]], topN, (v) => setQ({ top: String(v) })),
