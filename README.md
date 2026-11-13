@@ -13,7 +13,14 @@ Ink pairings became public on the Ravensburger Play network with DLC London
 
 - `pipeline/` (Python, standard library only) pulls tracked events from the
   public Ravensburger Play API, fetching only rounds that are new or not yet
-  complete, and stores them compactly in `data/rph/<event id>/`.
+  complete, and stores them compactly in `data/rph/<event id>/`. Files are
+  rewritten only when results move, so a quiet check commits nothing. When a
+  day's rounds are done (the next phase is a day-2 Swiss, or it is past 20:00
+  at the venue) the event sleeps until an hour before the next day's start.
+- Day 2 is projected before it is paired. With the cut in match points
+  (`day2_points`: default 18, i.e. 6-2, for events with two Swiss phases;
+  override per event in `data/events.json`), a player on the cut is locked in,
+  one who can no longer reach it is out, and the rest are still alive.
 - Once an event's week begins, it takes one Duels snapshot of the two full
   weeks (Sunday to Saturday) before it: Core or Infinity, best of three and
   best of one, all ranks and Legendary+. That is about nine requests, and the
