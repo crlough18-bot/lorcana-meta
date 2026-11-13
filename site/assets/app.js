@@ -7,7 +7,7 @@
 
   const INKS = ["amber", "amethyst", "emerald", "ruby", "sapphire", "steel"];
   const TABS = [
-    ["overview", "Overview"], ["winrates", "Win rates"], ["matchups", "Matchups"], ["conversion", "Conversion"],
+    ["overview", "Overview"], ["matchups", "Matchups"], ["conversion", "Conversion"],
     ["rounds", "Round by round"], ["duels", "vs Duels"], ["players", "Players"],
   ];
   const app = document.getElementById("app");
@@ -107,7 +107,7 @@
     const [path, qs] = raw.split("?");
     const parts = path.split("/").filter(Boolean);
     const q = Object.fromEntries(new URLSearchParams(qs || ""));
-    if (parts[0] === "e" && parts[1]) return { view: "event", slug: parts[1], tab: parts[2] || "overview", q };
+    if (parts[0] === "e" && parts[1]) return { view: "event", slug: parts[1], tab: parts[2] === "winrates" ? "overview" : parts[2] || "overview", q };
     if (parts[0] === "about") return { view: "about", q };
     return { view: "home", q };
   }
@@ -157,6 +157,7 @@
     if (!seated.size) for (let p = 0; p < P; p++) { seated.add(p); field[deckOf[p]]++; }
     const fieldN = seated.size;
     const fieldKnown = fieldN - (unknown >= 0 ? field[unknown] : 0);
+    const fieldSet = seated;
 
     const scopeTest = { all: () => true, d1: (m) => m[0] === 1, d2: (m) => m[0] === 2, cut: (m) => m[0] >= 3 };
     function stats(scope) {
@@ -213,7 +214,7 @@
     const cut = cutPhase != null ? playersIn(cutPhase, roundsIn(cutPhase)[0]) : null;
 
     const reported = M.filter((m) => m[4] !== -1).length;
-    return { data, meta: data.meta, decks, unknown, P, deckOf, M, phases, roundsIn, roundDone, field, fieldN, fieldKnown,
+    return { data, meta: data.meta, decks, unknown, P, deckOf, M, phases, roundsIn, roundDone, field, fieldN, fieldKnown, fieldSet,
              stats, recordsThrough, playersIn, deckCount, lastP1, day2, cut, cutPhase, reported };
   }
 
@@ -253,26 +254,44 @@
   const tone = (wr, n, min = 100) => (n < min || wr == null ? "muted" : wr >= 54 ? "good" : wr <= 46 ? "bad" : "");
 
   // ------------------------------------------------------------ views
+  const statusBadge = (e) => (e.live ? h("span", { class: "badge live" }, "Live")
+    : e.final ? h("span", { class: "badge" }, "Final")
+    : h("span", { class: "badge" }, e.display_status === "upcoming" ? "Upcoming" : "In progress"));
+  const inkFill = (name) => {
+    const inks = inksOf(name);
+    const a = `var(--${inks[0] || "unknown"})`, b = `var(--${inks[1] || inks[0] || "unknown"})`;
+    return `linear-gradient(90deg, ${a} 0 50%, ${b} 50% 100%)`;
+  };
+  function metaStrip(top) {
+    if (!top || !top.length) return null;
+    const used = top.reduce((a, [, v]) => a + v, 0);
+    return h("div", { class: "strip-wrap" },
+      h("div", { class: "strip", role: "img", "aria-label": "Most played ink pairings" },
+        top.map(([name, v]) => h("i", { style: `flex:${v};background:${inkFill(name)}`, tip: `${slashName(name)}\n${pct(v)} of players` })),
+        used < 100 ? h("i", { class: "rest", style: `flex:${100 - used}`, tip: `Every other pairing\n${pct(100 - used)}` }) : null),
+      h("div", { class: "strip-legend" }, top.slice(0, 3).map(([name, v]) => h("span", null, deckChip(name, true), h("b", null, pct(v, 0))))));
+  }
   function viewHome() {
-    const live = index.events.filter((e) => e.live);
-    return h("div", { class: "section" },
-      h("section", { class: "hero" },
-        h("h1", null, "The Lorcana tournament meta, from every match played"),
-        h("p", null, "Ink pairing share, win rates, matchups and conversion for big Disney Lorcana events, built from every pairing and result the event reports, not just the top decklists. Updated every few minutes while an event runs, and compared with the online meta from the same weeks.")),
-      live.length ? h("p", null, h("span", { class: "badge live" }, "Live"), " ", live.map((e) => h("a", { href: `#/e/${e.slug}/overview` }, e.name))) : null,
-      h("h2", null, "Events"),
-      index.events.length ? h("div", { class: "cards" }, index.events.map(eventCard)) : h("div", { class: "empty" }, "No events yet."),
-      h("p", { class: "note" }, "Ink pairings became public on the Ravensburger Play network with DLC London in November 2026, so events before it cannot be covered. New big events with public pairings are picked up automatically."));
+    return h("div", { class: "home" },
+      h("section", { class: "masthead home-mast" },
+        h("span", { class: "kicker" }, "Disney Lorcana tournament meta"),
+        h("h1", null, "Lorcana Meta")),
+      h("div", { class: "section-head" }, h("h2", null, "Events"), h("span", { class: "muted" }, `${index.events.length} tracked`)),
+      index.events.length ? h("div", { class: "cards" }, index.events.slice().sort((a, b) => (b.live - a.live) || (b.start || "").localeCompare(a.start || "")).map(eventCard)) : h("div", { class: "empty" }, "No events yet."));
   }
   function eventCard(e) {
-    return h("a", { class: "card", href: `#/e/${e.slug}/overview` },
-      h("div", { class: "split" }, h("span", { class: "when" }, dateRange(e.start, e.end)),
-        e.live ? h("span", { class: "badge live" }, "Live") : e.final ? h("span", { class: "badge" }, "Final") : h("span", { class: "badge" }, e.display_status === "upcoming" ? "Upcoming" : "In progress")),
-      h("h3", null, e.name),
-      h("div", { class: "stats" },
-        h("span", null, `${num(e.players)} players`), h("span", null, e.format || ""),
-        e.rounds_done ? h("span", null, `${e.rounds_done} rounds done`) : null),
-      e.top_deck ? h("div", null, h("span", { class: "muted" }, "Most played "), deckChip(e.top_deck)) : null);
+    const d = new Date(e.start);
+    return h("a", { class: "card ev-card", href: `#/e/${e.slug}/overview` },
+      h("div", { class: "datebox", "aria-hidden": "true" },
+        h("span", null, d.toLocaleDateString("en-GB", { month: "short" })), h("b", null, String(d.getDate()))),
+      h("div", { class: "ev-card-body" },
+        h("div", { class: "split" }, statusBadge(e), h("span", { class: "muted small" }, dateRange(e.start, e.end))),
+        h("h3", null, e.name),
+        h("div", { class: "stats" },
+          h("span", null, h("b", null, num(e.players)), " players"),
+          e.rounds_planned ? h("span", null, h("b", null, `${e.rounds_done || 0}/${e.rounds_planned}`), " rounds") : null,
+          h("span", null, e.format || "")),
+        metaStrip(e.top_decks || (e.top_deck ? [[e.top_deck, 0]] : null))));
   }
 
   function viewAbout() {
@@ -294,14 +313,16 @@
     const m = md.meta;
     const doneRounds = (m.rounds || []).filter((r) => r.status === "COMPLETE").length;
     const totalPlanned = (m.phases || []).reduce((a, p) => a + (p.rounds_planned || 0), 0);
-    const status = m.live ? h("span", { class: "badge live" }, "Live") : m.final ? h("span", { class: "badge" }, "Final") : h("span", { class: "badge" }, m.display_status === "upcoming" ? "Upcoming" : "In progress");
+    const updated = (m.rounds || []).map((r) => r.fetched_at).filter(Boolean).sort().pop() || m.built_at;
     return h("div", { class: "ev-head" },
-      status,
-      h("h1", null, m.name),
-      h("div", { class: "ev-sub" },
-        h("span", null, dateRange(m.start, m.end)), m.venue ? h("span", null, m.venue) : null, h("span", null, m.format || ""),
-        h("span", null, `Updated ${ago(m.fetched_at || m.built_at)}`),
-        h("a", { href: m.url, rel: "noopener" }, "Official page")),
+      h("section", { class: "masthead" },
+        h("div", { class: "crumbs" }, h("a", { href: "#/" }, "Events"), h("span", null, "/"), statusBadge(m)),
+        h("h1", null, m.name),
+        h("div", { class: "ev-sub" },
+          h("span", null, dateRange(m.start, m.end)), m.venue ? h("span", null, m.venue) : null, h("span", null, m.format || ""),
+          totalPlanned ? h("span", null, `Round ${doneRounds} of ${totalPlanned}`) : null,
+          h("span", null, `Updated ${ago(updated)}`),
+          h("a", { href: m.url, rel: "noopener" }, "Official event page ↗"))),
       h("nav", { class: "tabs", "aria-label": "Event views" },
         TABS.map(([k, label]) => h("a", { href: `#/e/${m.slug}/${k}${location.hash.includes("?") ? "?" + location.hash.split("?")[1] : ""}`, "aria-current": k === tab ? "page" : null }, label))));
   }
@@ -318,78 +339,40 @@
 
   // ---- overview
   function viewOverview(md, q) {
-    const st = md.stats("all");
+    const scope = q.scope || "all", min = Number(q.min ?? 50);
+    const all = md.stats("all");
+    const st = scope === "all" ? all : md.stats(scope);
     const known = knownDecks(md);
-    const big = known.filter((i) => st[i].n >= 150).sort((a, b) => st[b].wr - st[a].wr);
+    const big = known.filter((i) => all[i].n >= 150).sort((a, b) => all[b].wr - all[a].wr);
     const top = known.slice().sort((a, b) => md.field[b] - md.field[a]);
     const kpi = (v, l) => h("div", { class: "kpi" }, h("b", null, v), h("span", null, l));
     const doneRounds = (md.meta.rounds || []).filter((r) => r.status === "COMPLETE").length;
     const takeaway = [];
     if (top.length) takeaway.push(h("span", null, h("b", null, slashName(md.decks[top[0]])), ` is the most played pairing at ${pct(fieldShare(md, top[0]))} of the field.`));
-    if (big.length) takeaway.push(h("span", null, " Among pairings with 150+ matches, ", h("b", null, slashName(md.decks[big[0]])), ` has the best match win rate at ${pct(st[big[0]].wr)}`, big.length > 1 ? h("span", null, " and ", h("b", null, slashName(md.decks[big[big.length - 1]])), ` the weakest at ${pct(st[big[big.length - 1]].wr)}.`) : "."));
-    const maxShare = Math.max(...top.map((i) => fieldShare(md, i)), 1);
+    if (big.length) takeaway.push(h("span", null, " Among pairings with 150+ matches, ", h("b", null, slashName(md.decks[big[0]])), ` has the best match win rate at ${pct(all[big[0]].wr)}`, big.length > 1 ? h("span", null, " and ", h("b", null, slashName(md.decks[big[big.length - 1]])), ` the weakest at ${pct(all[big[big.length - 1]].wr)}.`) : "."));
+    const rows = known.map((i) => Object.assign({}, st[i], { share: fieldShare(md, i), players: md.field[i] })).filter((r) => r.players || r.n + r.mir + r.d > 0);
+    const maxShare = Math.max(...rows.map((r) => r.share), 1);
     return h("div", { class: "section" },
       h("div", { class: "kpis" },
         kpi(num(md.fieldN), "Players"), kpi(String(known.filter((i) => md.field[i] > 0).length), "Ink pairings"),
         kpi(String(doneRounds), "Rounds complete"), kpi(num(md.reported), "Matches reported"),
         md.unknown >= 0 && md.field[md.unknown] ? kpi(num(md.field[md.unknown]), "No deck registered") : null),
       takeaway.length ? h("p", { class: "takeaway" }, takeaway) : null,
-      h("div", { class: "grid-2" },
-        h("div", { class: "panel section" }, h("h2", null, "Field share"),
-          h("p", { class: "note" }, "Share of all players seated in round 1."),
-          table("ov-share", [
-            { key: "name", label: "Pairing", align: "l", cell: (r) => deckChip(r.name), sortable: false },
-            { key: "players", label: "Players", sortable: false },
-            { key: "share", label: "Share", cell: (r) => pct(r.share), sortable: false },
-            { key: "bar", label: "", sortable: false, cell: (r) => h("span", { class: "bar", style: `width:${Math.max(2, 72 * r.share / maxShare)}px`, tip: `${slashName(r.name)}\n${r.players} players · ${pct(r.share)}` }) },
-          ], top.filter((i) => md.field[i] > 0).map((i) => ({ name: md.decks[i], players: md.field[i], share: fieldShare(md, i) })))),
-        h("div", { class: "panel section" }, h("h2", null, "Match win rate, biggest pairings"),
-          h("p", { class: "note" }, "Pairings with 150+ non-mirror matches. The range is a 95% interval."),
-          big.length ? table("ov-wr", [
-            { key: "name", label: "Pairing", align: "l", cell: (r) => deckChip(r.name), sortable: false },
-            { key: "n", label: "Matches", cell: (r) => num(r.n), sortable: false },
-            { key: "wr", label: "Win rate", cell: (r) => pct(r.wr), cls: (r) => tone(r.wr, r.n), sortable: false },
-            { key: "ci", label: "Range", cell: (r) => h("span", { class: "ci" }, `${r.ci[0].toFixed(0)}–${r.ci[1].toFixed(0)}%`), sortable: false },
-          ], big.map((i) => st[i])) : h("p", { class: "note" }, "Not enough results yet."))),
-      md.cut ? topCutPanel(md) : null,
-      duelsTeaser(md));
-  }
-  function topCutPanel(md) {
-    const rec = md.recordsThrough(99, 99);
-    const list = [...md.cut].sort((a, b) => rec[b].w - rec[a].w);
-    return h("div", { class: "panel section" }, h("h2", null, "Top cut"),
-      h("ul", { class: "list" }, list.map((p) => h("li", null, h("span", null, md.data.players[p][0] || "Player"), deckChip(md.decks[md.deckOf[p]])))));
-  }
-  function duelsTeaser(md) {
-    if (!md.data.duels) return null;
-    const rows = duelsRows(md, "bo3", "all").filter((r) => r.eventN >= 150 && r.duels != null).sort((a, b) => b.delta - a.delta);
-    if (!rows.length) return null;
-    const best = rows[0], worst = rows[rows.length - 1];
-    return h("div", { class: "panel section" }, h("h2", null, "Against the online meta"),
-      h("p", null, h("b", null, slashName(best.name)), ` won ${Math.abs(best.delta).toFixed(1)} points ${best.delta >= 0 ? "more" : "less"} of its games here than on Duels in the two weeks before, the biggest gain; `,
-        h("b", null, slashName(worst.name)), ` won ${Math.abs(worst.delta).toFixed(1)} points ${worst.delta >= 0 ? "more" : "fewer"}, the biggest drop. `,
-        h("a", { href: `#/e/${md.meta.slug}/duels` }, "See every pairing")));
-  }
-
-  // ---- win rates
-  function viewWinrates(md, q) {
-    const scope = q.scope || "all", min = Number(q.min ?? 50);
-    const st = md.stats(scope);
-    const rows = knownDecks(md).map((i) => Object.assign({}, st[i], { share: fieldShare(md, i), players: md.field[i] })).filter((r) => r.n + r.mir + r.d > 0);
-    return h("div", { class: "section" },
-      h("div", { class: "controls" }, scopeControl(md, q), minControl(q, 50)),
-      h("p", { class: "note" }, "Match win rate leaves out mirrors, byes, draws, unreported matches and players with no registered deck. Click a column to sort; hover a header for its definition."),
-      h("div", { class: "panel" }, table("wr", [
+      h("div", { class: "panel section" },
+        h("div", { class: "split" }, h("h2", null, "Pairings"), h("span", { class: "note" }, "Click a column to sort. Hover a header for its definition.")),
+        h("div", { class: "controls" }, scopeControl(md, q), minControl(q, 50)),
+        table("wr", [
         { key: "name", label: "Pairing", align: "l", cell: (r) => deckChip(r.name), sort: (r) => r.name },
         { key: "players", label: "Players", cell: (r) => num(r.players) },
-        { key: "share", label: "Field", cell: (r) => pct(r.share), help: "Share of all players seated in round 1." },
+        { key: "share", label: "Field", cell: (r) => h("span", { class: "sharecell" }, h("span", { class: "bar", style: `width:${Math.max(2, 56 * r.share / maxShare)}px;background:${inkFill(r.name)}` }), pct(r.share)), help: "Share of all players seated in round 1." },
         { key: "n", label: "Matches", cell: (r) => num(r.n), help: "Non-mirror matches with a result." },
         { key: "wr", label: "Match WR", cell: (r) => pct(r.wr), cls: (r) => tone(r.wr, r.n, min || 50) },
         { key: "lo", label: "95% range", sort: (r) => r.ci[0], cell: (r) => h("span", { class: "ci" }, r.n ? `${r.ci[0].toFixed(0)}–${r.ci[1].toFixed(0)}` : "—"), help: "If two ranges overlap a lot, the difference may be noise." },
         { key: "gwr", label: "Game WR", cell: (r) => pct(r.gwr) },
         { key: "w", label: "W–L–D", sort: (r) => r.w, cell: (r) => `${r.w}–${r.l}–${r.d}` },
         { key: "mir", label: "Mirrors", cell: (r) => num(r.mir) },
-      ], rows, { sortKey: "share", rowClass: (r) => (r.n < min ? "dim" : null) })));
+      ], rows, { sortKey: "share", rowClass: (r) => (r.n < min ? "dim" : null) }),
+        h("p", { class: "note" }, "Match win rate leaves out mirrors, byes, draws, unreported matches and players with no registered deck. The 95% range shows how much of a gap could be noise.")));
   }
 
   // ---- matchups
@@ -407,7 +390,7 @@
     const head = h("tr", null, h("th"), order.map((j) => h("th", { tip: slashName(md.decks[j]) }, shortName(md.decks[j]))));
     const body = order.map((i) => h("tr", null, h("th", { class: "row", tip: slashName(md.decks[i]) }, shortName(md.decks[i])),
       order.map((j) => {
-        if (i === j) return h("td", { class: "self" }, `mirror ${st[i].mir}`);
+        if (i === j) return h("td", { class: "mirror", "aria-label": "Mirror", tip: `${slashName(md.decks[i])} mirror\n${st[i].mir} matches` });
         const x = mu.get(i + ":" + j);
         if (!x) return h("td", { class: "self" }, "—");
         const n = x.w + x.l, wr = 100 * x.w / n, ci = wilson(x.w, n);
@@ -456,44 +439,64 @@
   }
 
   // ---- conversion
-  function viewConversion(md, q) {
-    const L = Number(q.losses ?? 1);
+  function viewConversion(md) {
     const known = knownDecks(md);
-    const rows = [];
-    let bracket = null, bracketN = 0, label = "";
-    if (md.lastP1 != null) {
-      const rec = md.recordsThrough(1, md.lastP1);
-      bracket = new Set();
-      for (let p = 0; p < md.P; p++) if (rec[p].played && rec[p].l <= L) bracket.add(p);
-      bracketN = bracket.size;
-      label = `${md.lastP1 - L}–${L} or better after round ${md.lastP1}`;
-    }
-    const bc = bracket ? md.deckCount(bracket) : null;
+    const R = md.lastP1;
+    const rec = R != null ? md.recordsThrough(1, R) : null;
+    // day 1 wins of every player seated in round 1, by pairing
+    const wins = md.decks.map(() => []);
+    if (rec) for (const p of md.fieldSet) wins[md.deckOf[p]].push(rec[p].w);
+    const allWins = known.flatMap((i) => wins[i]);
+    const fieldAvg = allWins.length ? allWins.reduce((a, b) => a + b, 0) / allWins.length : null;
     const d2c = md.day2 ? md.deckCount(md.day2) : null;
     const cutc = md.cut ? md.deckCount(md.cut) : null;
-    const share = (c, n, i) => (c && n ? 100 * c[i] / n : null);
-    for (const i of known) {
-      if (!md.field[i]) continue;
-      const fs = fieldShare(md, i);
-      const bs = share(bc, bracketN, i), ds = share(d2c, md.day2 && md.day2.size, i);
-      rows.push({ name: md.decks[i], players: md.field[i], fs, bs, bconv: bs != null && fs ? bs / fs : null, bn: bc ? bc[i] : null,
-                  ds, dconv: ds != null && fs ? ds / fs : null, dn: d2c ? d2c[i] : null, cutn: cutc ? cutc[i] : null });
-    }
+    const d2Known = md.day2 ? md.day2.size - (md.unknown >= 0 ? d2c[md.unknown] : 0) : 0;
+    const cutKnown = md.cut ? md.cut.size - (md.unknown >= 0 ? cutc[md.unknown] : 0) : 0;
+    const rows = known.filter((i) => md.field[i]).map((i) => {
+      const fs = fieldShare(md, i), w = wins[i];
+      const ds = d2c && d2Known ? 100 * d2c[i] / md.day2.size : null;
+      const cs = cutc && cutKnown ? 100 * cutc[i] / md.cut.size : null;
+      const dist = R != null ? Array.from({ length: R + 1 }, (_, k) => w.filter((x) => x === k).length) : null;
+      return { i, name: md.decks[i], players: md.field[i], fs, avg: w.length ? w.reduce((a, b) => a + b, 0) / w.length : null, dist,
+               best: w.length ? Math.max(...w) : null,
+               dn: d2c ? d2c[i] : null, ds, dconv: ds != null && fs ? ds / fs : null,
+               cutn: cutc ? cutc[i] : null, cs, cconv: cs != null && fs ? cs / fs : null };
+    });
     const convCls = (r, v) => (r.players < 15 || v == null ? "muted" : v >= 1.15 ? "good" : v <= 0.85 ? "bad" : "");
+    const avgCls = (r) => (r.players < 15 || r.avg == null || fieldAvg == null ? "muted" : r.avg - fieldAvg >= 0.25 ? "good" : fieldAvg - r.avg >= 0.25 ? "bad" : "");
+    const conv = (v) => (v == null ? "—" : v.toFixed(2) + "×");
+    const distCell = (r) => {
+      if (!r.dist) return "—";
+      const n = r.dist.reduce((a, b) => a + b, 0) || 1, mx = Math.max(...r.dist, 1);
+      return h("span", { class: "dist", "aria-label": "Day 1 wins distribution" }, r.dist.map((c, k) =>
+        h("i", { style: `height:${Math.max(1, 22 * c / mx)}px`, class: k >= R - 1 ? "hi" : null, tip: `${slashName(r.name)}: ${k} win${k === 1 ? "" : "s"}\n${c} players · ${pct(100 * c / n)}` })));
+    };
+    const pending = (what) => h("span", { class: "muted" }, what);
     return h("div", { class: "section" },
-      h("div", { class: "controls" }, seg("Day 1 bracket", [[0, "Undefeated"], [1, "At most 1 loss"], [2, "At most 2 losses"]], L, (v) => setQ({ losses: String(v) }))),
-      h("p", { class: "note" }, md.lastP1 != null ? `Bracket: players ${label} (${num(bracketN)} players). Conversion is a pairing's share of a group divided by its share of the starting field, so above 1 means it is overperforming its numbers.` : "No day 1 round is complete yet."),
+      h("p", { class: "note" }, R != null
+        ? `Day 1 wins count every player seated in round 1, through round ${R}, with byes as wins and drops keeping the wins they had. The field averages ${fieldAvg.toFixed(2)} wins. Conversion is a pairing's share of day 2 (or the top cut) divided by its share of the starting field: above 1× it is beating its numbers.`
+        : "No day 1 round is complete yet."),
       h("div", { class: "panel" }, table("conv", [
         { key: "name", label: "Pairing", align: "l", cell: (r) => deckChip(r.name), sort: (r) => r.name },
+        { key: "players", label: "Players", cell: (r) => num(r.players) },
         { key: "fs", label: "Field", cell: (r) => pct(r.fs) },
-        { key: "bn", label: "In bracket", cell: (r) => num(r.bn) },
-        { key: "bs", label: "Bracket share", cell: (r) => pct(r.bs) },
-        { key: "bconv", label: "Conversion", cell: (r) => (r.bconv == null ? "—" : r.bconv.toFixed(2)), cls: (r) => convCls(r, r.bconv) },
-        { key: "dn", label: "Day 2", cell: (r) => (r.dn == null ? "—" : num(r.dn)), help: "Players of this pairing in the first round of day 2." },
+        { key: "avg", label: "Avg wins", cell: (r) => (r.avg == null ? "—" : r.avg.toFixed(2)), cls: avgCls, help: `Average day 1 wins per player${R != null ? `, out of ${R}` : ""}. Green is a quarter of a win or more above the field.` },
+        { key: "dist", label: "Wins spread", sortable: false, cell: distCell, help: "How many of the pairing's players are on each number of wins, 0 on the left. Gold bars are the top two records." },
+        { key: "best", label: "Best", cell: (r) => (r.best == null ? "—" : `${r.best}–${R - r.best}`), help: "Best day 1 record by a player of this pairing." },
+        { key: "dn", label: "Day 2", cell: (r) => (r.dn == null ? pending("—") : num(r.dn)), help: "Players of this pairing in the first round of day 2." },
         { key: "ds", label: "Day 2 share", cell: (r) => pct(r.ds) },
-        { key: "dconv", label: "Day 2 conv.", cell: (r) => (r.dconv == null ? "—" : r.dconv.toFixed(2)), cls: (r) => convCls(r, r.dconv) },
+        { key: "dconv", label: "Day 2 conv.", cell: (r) => conv(r.dconv), cls: (r) => convCls(r, r.dconv) },
         { key: "cutn", label: "Top cut", cell: (r) => (r.cutn == null ? "—" : num(r.cutn)) },
-      ], rows, { sortKey: "fs" })));
+        { key: "cconv", label: "Cut conv.", cell: (r) => conv(r.cconv), cls: (r) => convCls(r, r.cconv) },
+      ], rows, { sortKey: "fs" })),
+      !md.day2 ? h("p", { class: "note" }, "Day 2 and top cut columns fill in once those rounds are paired.") : null,
+      md.cut ? topCutPanel(md) : null);
+  }
+  function topCutPanel(md) {
+    const rec = md.recordsThrough(99, 99);
+    const list = [...md.cut].sort((a, b) => rec[b].w - rec[a].w);
+    return h("div", { class: "panel section" }, h("h2", null, "Top cut"),
+      h("ul", { class: "list" }, list.map((p) => h("li", null, h("span", null, md.data.players[p][0] || "Player"), deckChip(md.decks[md.deckOf[p]])))));
   }
 
   // ---- round by round
@@ -592,43 +595,38 @@
     const rows = duelsRows(md, queue, tier);
     const t = duelsQueue(D, queue)[tier];
     const fmtDay = (d) => new Date(d + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-    const usable = rows.filter((r) => r.duels != null && r.g >= 100);
-    const over = usable.filter((r) => r.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, 5);
-    const under = usable.filter((r) => r.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, 5);
-    // scatter: x = Duels game WR, y = event game WR
-    const W = 640, H = 420, pad = 44;
-    const vals = usable.flatMap((r) => [r.duels, r.gwr]);
-    const lo = Math.floor(Math.min(40, ...vals) / 5) * 5, hi = Math.ceil(Math.max(60, ...vals) / 5) * 5;
-    const sx = (v) => pad + (v - lo) / (hi - lo) * (W - 2 * pad), sy = (v) => H - pad - (v - lo) / (hi - lo) * (H - 2 * pad);
-    const maxShare = Math.max(...usable.map((r) => r.share), 1);
-    const ticks = []; for (let v = lo; v <= hi; v += 5) ticks.push(v);
-    const scatter = s("svg", { class: "chart", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Event game win rate against Duels game win rate by ink pairing" },
-      ticks.map((v) => [s("line", { class: "grid", x1: sx(v), x2: sx(v), y1: pad, y2: H - pad }), s("line", { class: "grid", x1: pad, x2: W - pad, y1: sy(v), y2: sy(v) }),
-        s("text", { x: sx(v), y: H - pad + 16, "text-anchor": "middle" }, v + "%"), s("text", { x: pad - 6, y: sy(v) + 4, "text-anchor": "end" }, v + "%")]),
-      s("line", { class: "ref", x1: sx(lo), y1: sy(lo), x2: sx(hi), y2: sy(hi) }),
-      s("text", { x: W - pad, y: H - 6, "text-anchor": "end" }, "Duels game win rate →"),
-      s("text", { x: 4, y: pad - 14 }, "↑ Event game win rate"),
-      s("text", { x: sx(lo) + 8, y: sy(hi) + 4 }, "above the line: better here than online"),
+    const usable = rows.filter((r) => r.duels != null && r.g >= 100).sort((a, b) => b.delta - a.delta);
+    // diverging gap chart: event game WR minus Duels game WR, with the event's 95% range as a whisker
+    const reach = Math.max(5, ...usable.flatMap((r) => [Math.abs(r.gci[0] - r.duels), Math.abs(r.gci[1] - r.duels)]));
+    const span = Math.ceil(reach / 5) * 5;
+    const X = (v) => 50 + 50 * Math.max(-span, Math.min(span, v)) / span;
+    const ticks = []; for (let v = -span; v <= span; v += 5) ticks.push(v);
+    const gapChart = h("div", { class: "gap", role: "img", "aria-label": "Game win rate at the event minus on Duels, by ink pairing" },
+      h("div", { class: "gap-row gap-axis" }, h("span"),
+        h("div", { class: "gap-track" }, ticks.map((v) => h("span", { class: v % 10 ? "tick minor" : "tick", style: `left:${X(v)}%` }, v === 0 ? "0" : signed(v, 0)))),
+        h("span"), h("span", { class: "gap-vals" })),
       usable.map((r) => {
-        const inks = inksOf(r.name);
-        const rad = 5 + 14 * Math.sqrt(r.share / maxShare);
-        return [s("circle", { cx: sx(r.duels), cy: sy(r.gwr), r: rad, fill: `var(--${inks[0] || "unknown"})`, "fill-opacity": 0.75, stroke: `var(--${inks[1] || inks[0] || "unknown"})`, "stroke-width": 3,
-          tip: `${slashName(r.name)}\nEvent ${pct(r.gwr)} of ${num(r.g)} games\nDuels ${pct(r.duels)} of ${num(r.dgames)} games\nField ${pct(r.share)} · Duels play ${pct(r.play)}` }),
-          r.share >= 4 || Math.abs(r.delta) >= 4 ? s("text", { x: sx(r.duels) + rad + 3, y: sy(r.gwr) + 4, style: "fill:var(--fg)" }, shortName(r.name)) : null];
+        const a = X(0), b = X(r.delta), lo = X(r.gci[0] - r.duels), hi = X(r.gci[1] - r.duels);
+        const cls = r.delta >= 0 ? "pos" : "neg";
+        return h("div", { class: "gap-row", tip: `${slashName(r.name)}\nEvent ${pct(r.gwr)} of ${num(r.g)} games (range ${r.gci[0].toFixed(0)}–${r.gci[1].toFixed(0)}%)\nDuels ${pct(r.duels)} of ${num(r.dgames)} games\n${r.sig ? "A real gap: Duels sits outside the event's range" : "Could be noise: Duels sits inside the event's range"}` },
+          deckChip(r.name),
+          h("div", { class: "gap-track" },
+            ticks.map((v) => h("i", { class: v === 0 ? "zero" : "grid", style: `left:${X(v)}%` })),
+            h("span", { class: "whisker", style: `left:${lo}%;width:${Math.max(0.5, hi - lo)}%` }),
+            h("span", { class: `gbar ${cls}${r.sig ? "" : " soft"}`, style: `left:${Math.min(a, b)}%;width:${Math.abs(b - a)}%` })),
+          h("b", { class: r.sig ? (r.delta >= 0 ? "good" : "bad") : "muted" }, signed(r.delta, 1)),
+          h("span", { class: "gap-vals" }, `${pct(r.gwr)} vs ${pct(r.duels)}`));
       }));
-    const perfList = (list, sign) => list.length ? h("ul", { class: "list" }, list.map((r) => h("li", null, deckChip(r.name),
-      h("span", { class: sign > 0 ? "good" : "bad", tip: `${slashName(r.name)}\nEvent ${pct(r.gwr)} (range ${r.gci[0].toFixed(0)}–${r.gci[1].toFixed(0)}%)\nDuels ${pct(r.duels)}${r.sig ? "\nOutside the event's 95% range" : "\nWithin the event's 95% range: could be noise"}` },
-        signed(r.delta, 1, " pts"), r.sig ? "" : " ?")))) : h("p", { class: "note" }, "None with 100+ games.");
     return h("div", { class: "section" },
       h("div", { class: "controls" },
         seg("Duels queue", [["bo3", "Best of 3"], ["bo1", "Best of 1"]], queue, (v) => setQ({ queue: v === "bo3" ? null : v })),
         seg("Duels players", [["all", "All ranks"], ["legendary", "Legendary+"]], tier, (v) => setQ({ tier: v === "all" ? null : v }))),
-      h("p", { class: "note" }, `Compared with ${num(t.games)} Duels games from ${fmtDay(D.first_day)} to ${fmtDay(D.last_day)}, the two full weeks before the event's week. Both sides use game win rate. A "?" means the gap sits inside the event's own 95% range, so it could be noise.`),
-      h("div", { class: "grid-2" },
-        h("div", { class: "panel section" }, h("h2", null, "Overperformers"), h("p", { class: "note" }, "Won more games here than online."), perfList(over, 1)),
-        h("div", { class: "panel section" }, h("h2", null, "Underperformers"), h("p", { class: "note" }, "Won fewer games here than online."), perfList(under, -1))),
-      h("div", { class: "panel section" }, h("h2", null, "Event against online, every pairing"),
-        h("p", { class: "note" }, "Dot size is field share; each dot is filled with its first ink and ringed with its second. The dashed line is equal performance."), scatter),
+      h("p", { class: "note" }, `Compared with ${num(t.games)} Duels games from ${fmtDay(D.first_day)} to ${fmtDay(D.last_day)}, the two full weeks before the event's week. Both sides use game win rate.`),
+      h("div", { class: "panel section" },
+        h("div", { class: "split" }, h("h2", null, "Over- and underperformers"),
+          h("div", { class: "legend" }, h("i", { class: "lg pos" }), h("span", null, "Better at the event"), h("i", { class: "lg neg" }), h("span", null, "Worse at the event"), h("i", { class: "lg soft" }), h("span", null, "Could be noise"))),
+        h("p", { class: "note" }, "Points of game win rate at the event minus on Duels, for pairings with 100+ games at the event. The thin line is the event's 95% range: a pale bar means Duels falls inside it, so the gap could be chance."),
+        usable.length ? gapChart : h("p", { class: "note" }, "Not enough games yet.")),
       h("div", { class: "panel" }, table("duels", [
         { key: "name", label: "Pairing", align: "l", cell: (r) => deckChip(r.name), sort: (r) => r.name },
         { key: "share", label: "Field", cell: (r) => pct(r.share) },
@@ -646,9 +644,36 @@
     const rec = md.recordsThrough(99, 99);
     const term = (q.find || "").toLowerCase();
     const deckFilter = q.deck != null && q.deck !== "" ? Number(q.deck) : null;
-    let rows = md.data.players.map(([name, d], p) => ({ p, name: name || "Player", deck: md.decks[d], d, w: rec[p].w, l: rec[p].l, dr: rec[p].d,
+    const everyone = md.data.players.map(([name, d], p) => ({ p, name: name || "Player", deck: md.decks[d], d, w: rec[p].w, l: rec[p].l, dr: rec[p].d,
       pts: 3 * rec[p].w + rec[p].d, played: rec[p].played, day2: md.day2 ? md.day2.has(p) : null, cut: md.cut ? md.cut.has(p) : null }))
       .filter((r) => r.played);
+    // each pairing's average: wins per match played by all of its pilots; a pilot's edge is wins above that pace
+    const agg = md.decks.map(() => ({ w: 0, n: 0, pilots: [] }));
+    for (const r of everyone) { agg[r.d].w += r.w; agg[r.d].n += r.played; agg[r.d].pilots.push(r); }
+    for (const a of agg) a.pilots.sort((x, y) => y.pts - x.pts || x.l - y.l);
+    const maxPlayed = Math.max(0, ...everyone.map((r) => r.played));
+    for (const r of everyone) {
+      const a = agg[r.d];
+      r.rate = a.n ? a.w / a.n : null;
+      r.edge = r.rate != null && r.d !== md.unknown ? r.w - r.played * r.rate : null;
+      r.rank = a.pilots.indexOf(r) + 1;
+      r.of = a.pilots.length;
+    }
+    // one standout per pairing: its best pilot still in the event, ranked by wins above the pairing's pace
+    const eligible = (r) => r.edge != null && r.of >= 8 && r.played >= Math.max(3, maxPlayed - 1);
+    const standouts = [];
+    for (const a of agg) {
+      const live = a.pilots.filter(eligible);
+      if (!live.length) continue;
+      if (deckFilter != null) { if (live[0].d === deckFilter) standouts.push(...live.slice(0, 8)); continue; }
+      const top = live[0];
+      top.tied = live.filter((r) => r !== top && r.pts === top.pts).length;
+      standouts.push(top);
+    }
+    standouts.sort((a, b) => b.edge - a.edge || b.pts - a.pts);
+    standouts.splice(8);
+    const starred = new Set(standouts.map((r) => r.p));
+    let rows = everyone;
     if (term) rows = rows.filter((r) => r.name.toLowerCase().includes(term));
     if (deckFilter != null) rows = rows.filter((r) => r.d === deckFilter);
     rows.sort((a, b) => b.pts - a.pts || a.l - b.l || a.name.localeCompare(b.name));
@@ -659,13 +684,27 @@
       h("option", { value: "" }, "All pairings"), knownDecks(md).filter((i) => md.field[i]).map((i) => h("option", { value: String(i), selected: deckFilter === i ? true : null }, slashName(md.decks[i]))));
     return h("div", { class: "section" },
       h("div", { class: "controls" }, h("label", { class: "ctl-group" }, h("span", null, "Player"), input), h("label", { class: "ctl-group" }, h("span", null, "Pairing"), deckSel)),
-      h("p", { class: "note" }, `Records from every reported match, byes counted as wins. Showing ${num(shownRows.length)} of ${num(rows.length)}; search to find anyone else. Names are as shown on the public event page.`),
+      standouts.length ? h("div", { class: "panel section" },
+        h("div", { class: "split" }, h("h2", null, "Standout pilots"), h("span", { class: "note" }, "Decklists worth looking up")),
+        h("p", { class: "note" }, deckFilter == null
+          ? "The best pilot of each pairing, ranked by wins above what that pairing's average player would have from the same number of matches. A strong record on a weak pairing ranks high. Players still in the event, on pairings with 8+ pilots."
+          : "The best pilots of this pairing, by wins above its average player."),
+        h("div", { class: "pilots" }, standouts.map((r) => h("div", { class: "pilot" },
+          h("div", { class: "split" }, h("b", null, r.name), h("span", { class: "edge" }, signed(r.edge, 1), h("small", null, " wins"))),
+          deckChip(r.deck),
+          h("div", { class: "pilot-meta" },
+            h("span", null, h("b", null, `${r.w}–${r.l}${r.dr ? "–" + r.dr : ""}`), " record"),
+            h("span", null, h("b", null, `#${r.rank}`), ` of ${num(r.of)} on the pairing`, r.tied ? `, ${r.tied} more on the same record` : ""),
+            h("span", null, "pairing wins ", h("b", null, pct(100 * r.rate, 0)), " of matches")))))) : null,
+      h("p", { class: "note" }, `Records from every reported match, byes counted as wins. ★ marks a standout pilot. Showing ${num(shownRows.length)} of ${num(rows.length)}; search to find anyone else. Names are as shown on the public event page.`),
       h("div", { class: "panel" }, table("players", [
         { key: "rank", label: "#", sortable: false, cell: (r) => String(shownRows.indexOf(r) + 1) },
-        { key: "name", label: "Player", align: "l", sortable: false },
+        { key: "name", label: "Player", align: "l", sortable: false, cell: (r) => (starred.has(r.p) ? h("span", null, h("span", { class: "star", "aria-label": "Standout pilot" }, "★ "), r.name) : r.name) },
         { key: "deck", label: "Pairing", align: "l", sortable: false, cell: (r) => deckChip(r.deck) },
         { key: "rec", label: "W–L–D", sortable: false, cell: (r) => `${r.w}–${r.l}–${r.dr}` },
         { key: "pts", label: "Points", sortable: false },
+        { key: "edge", label: "vs pairing", sortable: false, cell: (r) => (r.edge == null ? "—" : signed(r.edge, 1)), cls: (r) => (r.edge == null ? "muted" : r.edge >= 1.5 ? "good" : r.edge <= -1.5 ? "bad" : ""), help: "Wins above (or below) what this pairing's average player would have from the same number of matches." },
+        { key: "prank", label: "On pairing", sortable: false, cell: (r) => (r.d === md.unknown ? "—" : `#${r.rank} of ${num(r.of)}`) },
         { key: "day2", label: "Day 2", sortable: false, cell: (r) => (r.day2 == null ? "—" : r.day2 ? "Yes" : "") },
         { key: "cut", label: "Top cut", sortable: false, cell: (r) => (r.cut == null ? "—" : r.cut ? "Yes" : "") },
       ], shownRows)));
@@ -676,6 +715,7 @@
     tip.hidden = true;
     const r = route();
     clearInterval(refreshTimer);
+    for (const a of document.querySelectorAll("[data-nav]")) a.setAttribute("aria-current", a.dataset.nav === r.view ? "page" : "false");
     try {
       await loadIndex();
       if (r.view === "home") { document.title = "Lorcana Meta"; app.replaceChildren(viewHome()); return; }
@@ -685,7 +725,7 @@
       if (!cache.has(r.slug)) app.replaceChildren(h("div", { class: "empty" }, "Loading event…"));
       const md = await loadEvent(r.slug);
       document.title = `${md.meta.name} · Lorcana Meta`;
-      const views = { overview: viewOverview, winrates: viewWinrates, matchups: viewMatchups, conversion: viewConversion, rounds: viewRounds, duels: viewDuels, players: viewPlayers };
+      const views = { overview: viewOverview, matchups: viewMatchups, conversion: viewConversion, rounds: viewRounds, duels: viewDuels, players: viewPlayers };
       const view = views[r.tab] || viewOverview;
       const scroll = window.scrollY;
       app.replaceChildren(eventHeader(md, r.tab), md.M.length ? view(md, r.q) : h("div", { class: "empty" }, "No pairings yet. This page fills in once round 1 is paired."));

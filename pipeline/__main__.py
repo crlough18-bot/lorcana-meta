@@ -237,11 +237,16 @@ def build(data: Path = DATA, out: Path = SITE_DATA) -> list:
         for p in e["players"]:
             field[p[1]] = field.get(p[1], 0) + 1
         top = max((k for k in field if e["decks"][k] != "Unknown"), key=lambda k: field[k], default=None)
+        known = sorted((k for k in field if e["decks"][k] != "Unknown"), key=lambda k: -field[k])
+        total = sum(field.values()) or 1
+        top_decks = [[e["decks"][k], round(100 * field[k] / total, 1)] for k in known[:6]]
         index.append(dict(slug=entry["slug"], id=m["id"], name=m["name"], start=m["start"], end=m["end"],
                           venue=m["venue"], address=m["address"], players=m["players"], format=m["format"],
                           live=m["live"], final=m["final"], display_status=m["display_status"],
                           rounds_done=sum(1 for r in m["rounds"] if r["status"] == "COMPLETE"),
-                          top_deck=e["decks"][top] if top is not None else None, has_duels=bool(e["duels"]),
+                          top_deck=e["decks"][top] if top is not None else None, top_decks=top_decks,
+                          rounds_planned=sum(p.get("rounds_planned") or 0 for p in m.get("phases") or []),
+                          has_duels=bool(e["duels"]),
                           pairings_visible=m["pairings_visible"], updated=m.get("fetched_at")))
     index.sort(key=lambda x: x["start"] or "", reverse=True)
     write(out / "index.json", dict(built_at=stamp(), events=index), indent=1)
