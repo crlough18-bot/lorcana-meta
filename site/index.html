@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lorcana Meta</title>
+<meta name="description" content="Disney Lorcana tournament meta from every match played: ink pairing share, win rates, matchups and conversion, live during events, compared with the online meta for the same weeks.">
+<meta name="theme-color" content="#0f1124">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="#/" aria-label="Lorcana Meta home">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 29 9.5v13L16 30 3 22.5v-13z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 8c3 4 5 6.5 5 9.5a5 5 0 0 1-10 0C11 14.5 13 12 16 8z" fill="currentColor"/></svg>
+      <span>Lorcana Meta</span>
+    </a>
+    <label class="picker">
+      <span class="sr-only">Event</span>
+      <select id="event-picker" aria-label="Choose an event"></select>
+    </label>
+    <nav class="topnav"><a href="#/">Events</a><a href="#/about">About</a></nav>
+  </div>
+</header>
+<main id="app" class="wrap" aria-live="polite"></main>
+<footer class="foot wrap">
+  <p>Lorcana Meta is an unofficial fan project, not affiliated with or endorsed by Disney or Ravensburger. Event data from the Ravensburger Play network; online comparison data from <a href="https://duels.ink/stats" rel="noopener">Duels.ink</a>, with thanks.</p>
+</footer>
+<div id="tip" class="tip" hidden></div>
+<script src="assets/app.js"></script>
+</body>
+</html>

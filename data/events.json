@@ -1,0 +1,23 @@
+{
+ "events": [
+  {
+   "id": 1254364,
+   "slug": "dlc-london-main-event-1-2026-11-13",
+   "name": "DLC London: Main Event 1",
+   "start": "2026-11-13T09:00:00+00:00",
+   "added": "manual",
+   "added_at": "2026-11-13T17:26:41Z",
+   "final": false
+  },
+  {
+   "id": 1254365,
+   "slug": "dlc-london-main-event-2-2026-11-14",
+   "name": "DLC London: Main Event 2",
+   "start": "2026-11-14T09:00:00+00:00",
+   "added": "manual",
+   "added_at": "2026-11-13T17:26:41Z",
+   "final": false
+  }
+ ],
+ "last_discover": "2026-11-13T17:29:56Z"
+}

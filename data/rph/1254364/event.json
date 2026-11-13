@@ -1,0 +1,92 @@
+{
+ "id": 1254364,
+ "name": "DLC London: Main Event 1",
+ "start": "2026-11-13T09:00:00+00:00",
+ "end": "2026-11-14T03:00:00+00:00",
+ "timezone": "Europe/London",
+ "display_status": "inProgress",
+ "players": 1633,
+ "format": "Core Constructed",
+ "family": "core",
+ "venue": "Fanfinity",
+ "address": "Western Gateway, London E16 1XL, UK",
+ "top_cut_size": null,
+ "url": "https://tcg.ravensburgerplay.com/events/1254364",
+ "pairings_visible": true,
+ "phases": [
+  {
+   "order": 1,
+   "type": "SWISS",
+   "status": "IN_PROGRESS",
+   "rounds_planned": 8,
+   "best_of": 3,
+   "rounds": [
+    {
+     "id": 1582171,
+     "round": 1,
+     "status": "COMPLETE",
+     "paired": true
+    },
+    {
+     "id": 1582172,
+     "round": 2,
+     "status": "COMPLETE",
+     "paired": true
+    },
+    {
+     "id": 1582173,
+     "round": 3,
+     "status": "COMPLETE",
+     "paired": true
+    },
+    {
+     "id": 1582174,
+     "round": 4,
+     "status": "COMPLETE",
+     "paired": true
+    },
+    {
+     "id": 1582175,
+     "round": 5,
+     "status": "COMPLETE",
+     "paired": true
+    },
+    {
+     "id": 1582176,
+     "round": 6,
+     "status": "IN_PROGRESS",
+     "paired": true
+    },
+    {
+     "id": 1582177,
+     "round": 7,
+     "status": "UPCOMING",
+     "paired": false
+    },
+    {
+     "id": 1582178,
+     "round": 8,
+     "status": "UPCOMING",
+     "paired": false
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "type": "SWISS",
+   "status": "UPCOMING",
+   "rounds_planned": 7,
+   "best_of": 3,
+   "rounds": []
+  },
+  {
+   "order": 3,
+   "type": "RANKED_SINGLE_ELIMINATION",
+   "status": "UPCOMING",
+   "rounds_planned": 3,
+   "best_of": 5,
+   "rounds": []
+  }
+ ],
+ "fetched_at": "2026-11-13T17:28:40Z"
+}
