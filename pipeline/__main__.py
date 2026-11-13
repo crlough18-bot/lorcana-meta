@@ -85,13 +85,19 @@ def pull_event(entry: dict, get=S.http_json, data: Path = DATA, log=print) -> di
     """Pull what changed for one tracked event. Returns a summary."""
     eid = entry["id"]
     d = data / "rph" / str(eid)
+    wake = parse_dt(entry.get("sleep_until"))
+    if wake and wake > now():
+        return dict(id=eid, state="sleeping", fetched=[], until=entry["sleep_until"])
+    entry.pop("sleep_until", None)
     ev = S.trim_event(get(f"{S.RPH}/events/{eid}/"))
     start = parse_dt(ev["start"])
     fetched = []
+    old_ev = read(d / "event.json", None)
     if start and start > now() + timedelta(hours=1):
-        write(d / "event.json", ev, indent=1)
+        save_if_changed(d / "event.json", ev, old_ev)
         return dict(id=eid, state="upcoming", fetched=[])
     players = read(d / "players.json", {})
+    players_before = json.dumps(players, sort_keys=True)
     all_complete = True
     for ph in ev["phases"]:
         for r in ph["rounds"]:
@@ -106,17 +112,62 @@ def pull_event(entry: dict, get=S.http_json, data: Path = DATA, log=print) -> di
             for pid, (name, deck) in ps.items():
                 old = players.get(pid)
                 players[pid] = [name or (old or [None])[0], deck or (old[1] if old else None)]
-            write(f, dict(phase=ph["order"], round=r["round"], status=r["status"], fetched_at=stamp(), rows=rows))
-            fetched.append(f.name)
             if r["status"] != "COMPLETE":
                 all_complete = False
-            log(f"  {entry['slug']}: phase {ph['order']} round {r['round']} {r['status']} ({len(rows)} matches)")
-    ev["fetched_at"] = stamp()
-    write(d / "players.json", players)
-    write(d / "event.json", ev, indent=1)
+            # only rewrite (and so commit and redeploy) when results or status moved
+            if not cached or cached.get("rows") != rows or cached.get("status") != r["status"]:
+                write(f, dict(phase=ph["order"], round=r["round"], status=r["status"], fetched_at=stamp(), rows=rows))
+                fetched.append(f.name)
+                log(f"  {entry['slug']}: phase {ph['order']} round {r['round']} {r['status']} ({len(rows)} matches)")
+    if json.dumps(players, sort_keys=True) != players_before:
+        write(d / "players.json", players)
+    if fetched:
+        ev["fetched_at"] = stamp()
+    elif old_ev:
+        ev["fetched_at"] = old_ev.get("fetched_at")
+    save_if_changed(d / "event.json", ev, old_ev)
     finished = ev["display_status"] == "complete" and all_complete and all(
         p["status"] == "COMPLETE" for p in ev["phases"] if p["rounds"])
+    if not finished:
+        until = day_break(ev)
+        if until:
+            entry["sleep_until"] = until.isoformat()
+            log(f"  {entry['slug']}: day's rounds are done; next check {entry['sleep_until']}")
     return dict(id=eid, state="final" if finished else "live", fetched=fetched)
+
+
+def save_if_changed(path: Path, ev: dict, old: dict | None) -> None:
+    if old != ev:
+        write(path, ev, indent=1)
+
+
+def day_break(ev: dict, at: datetime | None = None):
+    """When a day's play is over, the time to look again: an hour before the next day's start.
+
+    A day is over when no round is paired-and-unfinished, the last phase that has rounds is
+    complete, and the next phase has not been paired: either it is another Swiss phase (day 2 of a
+    multi-day event) or it is past 20:00 at the venue (a top cut that has to wait for tomorrow).
+    A same-evening top cut after a single-day Swiss is not treated as a break."""
+    at = at or now()
+    phases = ev.get("phases") or []
+    if any(r["paired"] and r["status"] != "COMPLETE" for p in phases for r in p["rounds"]):
+        return None
+    played = [p for p in phases if p["rounds"]]
+    if not played or played[-1]["status"] != "COMPLETE":
+        return None
+    later = [p for p in phases if p["order"] > played[-1]["order"]]
+    if not later:
+        return None
+    start = parse_dt(ev.get("start"))
+    if not start:
+        return None
+    local = at.astimezone(start.tzinfo)
+    if later[0].get("type") != "SWISS" and local.hour < 20:
+        return None
+    nxt = local.replace(hour=start.hour, minute=start.minute, second=0, microsecond=0) - timedelta(hours=1)
+    if nxt <= local:  # rounds that end after midnight still wake the same morning
+        nxt += timedelta(days=1)
+    return nxt
 
 
 def duels_file(ev: dict, data: Path = DATA) -> Path | None:
@@ -181,6 +232,19 @@ def refresh(get=S.http_json, data: Path = DATA, log=print, discover_ok=True, due
 
 # ---------------------------------------------------------------- build
 
+# Match points (3 a win, 1 a draw, byes count as wins) needed after the first Swiss phase to play
+# the second. Not published by the API; the Disney Lorcana Challenge cut is 6-2 (18 points).
+# Override per event with "day2_points" in data/events.json.
+DEFAULT_DAY2_POINTS = 18
+
+
+def day2_points(entry: dict, ev: dict) -> int | None:
+    if "day2_points" in entry:
+        return entry["day2_points"]
+    swiss = [p for p in ev.get("phases") or [] if p.get("type") == "SWISS"]
+    return DEFAULT_DAY2_POINTS if len(swiss) >= 2 else None
+
+
 def build_event(entry: dict, data: Path = DATA) -> dict | None:
     d = data / "rph" / str(entry["id"])
     ev = read(d / "event.json", None)
@@ -217,6 +281,7 @@ def build_event(entry: dict, data: Path = DATA) -> dict | None:
     live = not entry.get("final") and ev["display_status"] in ("inProgress",)
     return dict(
         meta=dict(ev, slug=entry["slug"], live=live, final=bool(entry.get("final")), built_at=stamp(),
+                  sleep_until=entry.get("sleep_until"), day2_points=day2_points(entry, ev),
                   rounds=[dict(phase=r["phase"], round=r["round"], status=r["status"], fetched_at=r.get("fetched_at"),
                                total=len(r["rows"]), reported=sum(1 for x in r["rows"] if x[3] != -1)) for r in rounds]),
         decks=decks, decks_key=[S.label_key(k) if k != "Unknown" else None for k in decks],

@@ -130,5 +130,62 @@ class Refresh(unittest.TestCase):
         self.assertEqual(a.name, "core-2026-10-25.json")
 
 
+def phases(p1_status, p1_rounds, p2_type="SWISS", p2_rounds=()):
+    return {"start": "2026-11-13T09:00:00+00:00", "phases": [
+        {"order": 1, "type": "SWISS", "status": p1_status, "rounds_planned": 8,
+         "rounds": [{"round": i + 1, "status": s, "paired": True} for i, s in enumerate(p1_rounds)]},
+        {"order": 2, "type": p2_type, "status": "UPCOMING", "rounds_planned": 7, "rounds": list(p2_rounds)}]}
+
+
+class DayBreak(unittest.TestCase):
+    from datetime import datetime as _dt, timezone as _tz
+    LATE = _dt(2026, 11, 13, 21, 30, tzinfo=_tz.utc)
+
+    def test_sleeps_after_day_one_until_an_hour_before_day_two(self):
+        ev = phases("COMPLETE", ["COMPLETE"] * 8)
+        self.assertEqual(P.day_break(ev, self.LATE).isoformat(), "2026-11-14T08:00:00+00:00")
+
+    def test_after_midnight_still_wakes_the_same_morning(self):
+        from datetime import datetime, timezone
+        ev = phases("COMPLETE", ["COMPLETE"] * 8)
+        self.assertEqual(P.day_break(ev, datetime(2026, 11, 14, 0, 40, tzinfo=timezone.utc)).isoformat(), "2026-11-14T08:00:00+00:00")
+
+    def test_no_break_between_rounds_or_mid_round(self):
+        self.assertIsNone(P.day_break(phases("IN_PROGRESS", ["COMPLETE"] * 5), self.LATE))
+        self.assertIsNone(P.day_break(phases("IN_PROGRESS", ["COMPLETE"] * 7 + ["IN_PROGRESS"]), self.LATE))
+
+    def test_same_evening_top_cut_is_not_a_break(self):
+        from datetime import datetime, timezone
+        ev = phases("COMPLETE", ["COMPLETE"] * 8, p2_type="RANKED_SINGLE_ELIMINATION")
+        self.assertIsNone(P.day_break(ev, datetime(2026, 11, 13, 17, 0, tzinfo=timezone.utc)))
+        self.assertIsNotNone(P.day_break(ev, self.LATE))
+
+
+class Quiet(unittest.TestCase):
+    def test_unchanged_round_is_not_rewritten_and_sleeping_event_is_not_called(self):
+        with tempfile.TemporaryDirectory() as t:
+            data = Path(t) / "data"
+            get, calls = fake_api(EVENT, ROUNDS)
+            P.add_event("77", get, data)
+            P.refresh(get, data, log=lambda *a: None, discover_ok=False, duels_ok=False)
+            r2 = data / "rph" / "77" / "rounds" / "p1r2.json"
+            ev = data / "rph" / "77" / "event.json"
+            before = (r2.read_text(encoding="utf-8"), ev.read_text(encoding="utf-8"))
+            P.refresh(get, data, log=lambda *a: None, discover_ok=False, duels_ok=False)
+            self.assertEqual((r2.read_text(encoding="utf-8"), ev.read_text(encoding="utf-8")), before)
+            reg = P.registry(data)
+            reg["events"][0]["sleep_until"] = "2999-01-01T00:00:00+00:00"
+            P.save_registry(reg, data)
+            calls.clear()
+            s = P.refresh(get, data, log=lambda *a: None, discover_ok=False, duels_ok=False)
+            self.assertEqual(calls, [])
+            self.assertEqual(s["pulled"][0]["state"], "sleeping")
+
+    def test_day2_points_default_only_with_a_second_swiss(self):
+        self.assertEqual(P.day2_points({}, phases("COMPLETE", [])), 18)
+        self.assertIsNone(P.day2_points({}, phases("COMPLETE", [], p2_type="RANKED_SINGLE_ELIMINATION")))
+        self.assertEqual(P.day2_points({"day2_points": 19}, phases("COMPLETE", [])), 19)
+
+
 if __name__ == "__main__":
     unittest.main()

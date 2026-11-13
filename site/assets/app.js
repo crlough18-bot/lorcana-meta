@@ -213,9 +213,38 @@
     const cutPhase = phases.find((p) => p >= 3);
     const cut = cutPhase != null ? playersIn(cutPhase, roundsIn(cutPhase)[0]) : null;
 
+    // day 2: the real roster once paired; until then, projected from day 1 match points against the
+    // known cutoff. Points only go up, so a player at the cutoff is locked in; one who cannot reach it
+    // with the rounds left (or who dropped) is out; everyone else is still alive.
+    const T = data.meta.day2_points;
+    const R1 = ((data.meta.phases || []).find((p) => p.order === 1) || {}).rounds_planned || roundsIn(1).length;
+    let d2 = null;
+    if (day2) {
+      const status = Array.from({ length: P }, (_, p) => (day2.has(p) ? "in" : "out"));
+      d2 = { status, projected: false, locked: day2, alive: new Set() };
+    } else if (T && roundsIn(1).length) {
+      const pts = new Array(P).fill(0), known = new Array(P).fill(0);
+      for (const m of M) {
+        if (m[0] !== 1 || m[4] === -1) continue;
+        const a = m[2], b = m[3];
+        if (m[4] === 3) { if (a >= 0) { pts[a] += 3; known[a]++; } continue; }
+        if (a < 0 || b < 0) continue;
+        known[a]++; known[b]++;
+        if (m[4] === 0) { pts[a]++; pts[b]++; } else if (m[4] === 1) pts[a] += 3; else pts[b] += 3;
+      }
+      const p1 = roundsIn(1), lastPaired = p1[p1.length - 1];
+      const inLast = playersIn(1, lastPaired);
+      const status = new Array(P).fill("out"), locked = new Set(), alive = new Set();
+      for (const p of fieldSet) {
+        if (pts[p] >= T) { status[p] = "in"; locked.add(p); }
+        else if (inLast.has(p) && pts[p] + 3 * Math.max(0, R1 - known[p]) >= T) { status[p] = "alive"; alive.add(p); }
+      }
+      d2 = { status, projected: true, locked, alive, T, R1, pts };
+    }
+
     const reported = M.filter((m) => m[4] !== -1).length;
     return { data, meta: data.meta, decks, unknown, P, deckOf, M, phases, roundsIn, roundDone, field, fieldN, fieldKnown, fieldSet,
-             stats, recordsThrough, playersIn, deckCount, lastP1, day2, cut, cutPhase, reported };
+             stats, recordsThrough, playersIn, deckCount, lastP1, day2, d2, cut, cutPhase, reported };
   }
 
   // decks shown: known decks ordered by field share
@@ -224,6 +253,7 @@
 
   // ------------------------------------------------------------ generic sortable table
   function table(id, cols, rows, opts = {}) {
+    cols = cols.filter(Boolean);
     const st = sortState[id] || (sortState[id] = { key: opts.sortKey || null, dir: opts.sortDir || "desc" });
     const sorted = rows.slice();
     if (st.key) {
@@ -322,6 +352,7 @@
           h("span", null, dateRange(m.start, m.end)), m.venue ? h("span", null, m.venue) : null, h("span", null, m.format || ""),
           totalPlanned ? h("span", null, `Round ${doneRounds} of ${totalPlanned}`) : null,
           h("span", null, `Updated ${ago(updated)}`),
+          m.sleep_until ? h("span", null, `Play resumes tomorrow; updates restart ${new Date(m.sleep_until).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZoneName: "short" })}`) : null,
           h("a", { href: m.url, rel: "noopener" }, "Official event page ↗"))),
       h("nav", { class: "tabs", "aria-label": "Event views" },
         TABS.map(([k, label]) => h("a", { href: `#/e/${m.slug}/${k}${location.hash.includes("?") ? "?" + location.hash.split("?")[1] : ""}`, "aria-current": k === tab ? "page" : null }, label))));
@@ -456,18 +487,19 @@
     if (rec) for (const p of md.fieldSet) wins[md.deckOf[p]].push(rec[p].w);
     const allWins = known.flatMap((i) => wins[i]);
     const fieldAvg = allWins.length ? allWins.reduce((a, b) => a + b, 0) / allWins.length : null;
-    const d2c = md.day2 ? md.deckCount(md.day2) : null;
+    const D2 = md.d2;
+    const d2c = D2 && D2.locked.size ? md.deckCount(D2.locked) : null;
+    const alc = D2 && D2.projected ? md.deckCount(D2.alive) : null;
     const cutc = md.cut ? md.deckCount(md.cut) : null;
-    const d2Known = md.day2 ? md.day2.size - (md.unknown >= 0 ? d2c[md.unknown] : 0) : 0;
     const cutKnown = md.cut ? md.cut.size - (md.unknown >= 0 ? cutc[md.unknown] : 0) : 0;
     const rows = known.filter((i) => md.field[i]).map((i) => {
       const fs = fieldShare(md, i), w = wins[i];
-      const ds = d2c && d2Known ? 100 * d2c[i] / md.day2.size : null;
+      const ds = d2c ? 100 * d2c[i] / D2.locked.size : null;
       const cs = cutc && cutKnown ? 100 * cutc[i] / md.cut.size : null;
       const dist = R != null ? Array.from({ length: R + 1 }, (_, k) => w.filter((x) => x === k).length) : null;
       return { i, name: md.decks[i], players: md.field[i], fs, avg: w.length ? w.reduce((a, b) => a + b, 0) / w.length : null, dist,
                best: w.length ? Math.max(...w) : null,
-               dn: d2c ? d2c[i] : null, ds, dconv: ds != null && fs ? ds / fs : null,
+               dn: d2c ? d2c[i] : null, alive: alc ? alc[i] : null, ds, dconv: ds != null && fs ? ds / fs : null,
                cutn: cutc ? cutc[i] : null, cs, cconv: cs != null && fs ? cs / fs : null };
     });
     const convCls = (r, v) => (r.players < 15 || v == null ? "muted" : v >= 1.15 ? "good" : v <= 0.85 ? "bad" : "");
@@ -480,7 +512,13 @@
         h("i", { style: `height:${Math.max(1, 22 * c / mx)}px`, class: k >= R - 1 ? "hi" : null, tip: `${slashName(r.name)}: ${k} win${k === 1 ? "" : "s"}\n${c} players · ${pct(100 * c / n)}` })));
     };
     const pending = (what) => h("span", { class: "muted" }, what);
+    const recOf = (pts) => (pts % 3 ? `${pts} points` : `${pts / 3}–${D2.R1 - pts / 3}`);
+    const d2Banner = D2 && D2.projected ? h("div", { class: "d2-banner" },
+      h("div", null, h("b", null, num(D2.locked.size)), h("span", null, "locked into day 2")),
+      D2.alive.size ? h("div", null, h("b", null, num(D2.alive.size)), h("span", null, "still alive")) : null,
+      h("p", { class: "note" }, `Day 2 needs ${D2.T} match points after ${D2.R1} rounds (${recOf(D2.T)} or better). A player is counted the moment they reach it, since points can only go up; players who can no longer reach it, or who dropped, are out. ${D2.alive.size ? "Shares update as more players lock in." : "Day 1 is settled: these are the day 2 numbers until the roster is paired."}`)) : null;
     return h("div", { class: "section" },
+      d2Banner,
       h("p", { class: "note" }, R != null
         ? `Day 1 wins count every player seated in round 1, through round ${R}, with byes as wins and drops keeping the wins they had. The field averages ${fieldAvg.toFixed(2)} wins. Conversion is a pairing's share of day 2 (or the top cut) divided by its share of the starting field: above 1× it is beating its numbers.`
         : "No day 1 round is complete yet."),
@@ -491,13 +529,16 @@
         { key: "avg", label: "Avg wins", cell: (r) => (r.avg == null ? "—" : r.avg.toFixed(2)), cls: avgCls, help: `Average day 1 wins per player${R != null ? `, out of ${R}` : ""}. Green is a quarter of a win or more above the field.` },
         { key: "dist", label: "Wins spread", sortable: false, cell: distCell, help: "How many of the pairing's players are on each number of wins, 0 on the left. Gold bars are the top two records." },
         { key: "best", label: "Best", cell: (r) => (r.best == null ? "—" : `${r.best}–${R - r.best}`), help: "Best day 1 record by a player of this pairing." },
-        { key: "dn", label: "Day 2", cell: (r) => (r.dn == null ? pending("—") : num(r.dn)), help: "Players of this pairing in the first round of day 2." },
-        { key: "ds", label: "Day 2 share", cell: (r) => pct(r.ds) },
+        { key: "dn", label: D2 && D2.projected ? "Day 2 locked" : "Day 2", cell: (r) => (r.dn == null ? pending("—") : num(r.dn)),
+          help: D2 && D2.projected ? `Players already on ${D2.T}+ points, so certain to make day 2.` : "Players of this pairing in the first round of day 2." },
+        D2 && D2.projected && D2.alive.size ? { key: "alive", label: "Still alive", cell: (r) => (r.alive ? num(r.alive) : h("span", { class: "muted" }, "0")),
+          help: `Players who can still reach ${D2.T} points with the rounds left.` } : null,
+        { key: "ds", label: D2 && D2.projected ? "Share so far" : "Day 2 share", cell: (r) => pct(r.ds), help: "Share of the players locked into day 2." },
         { key: "dconv", label: "Day 2 conv.", cell: (r) => conv(r.dconv), cls: (r) => convCls(r, r.dconv) },
         { key: "cutn", label: "Top cut", cell: (r) => (r.cutn == null ? "—" : num(r.cutn)) },
         { key: "cconv", label: "Cut conv.", cell: (r) => conv(r.cconv), cls: (r) => convCls(r, r.cconv) },
       ], rows, { sortKey: "fs" })),
-      !md.day2 ? h("p", { class: "note" }, "Day 2 and top cut columns fill in once those rounds are paired.") : null,
+      !md.day2 && !D2 ? h("p", { class: "note" }, "Day 2 and top cut columns fill in once those rounds are paired.") : null,
       md.cut ? topCutPanel(md) : null);
   }
   function topCutPanel(md) {
@@ -653,7 +694,7 @@
     const term = (q.find || "").toLowerCase();
     const deckFilter = q.deck != null && q.deck !== "" ? Number(q.deck) : null;
     const everyone = md.data.players.map(([name, d], p) => ({ p, name: name || "Player", deck: md.decks[d], d, w: rec[p].w, l: rec[p].l, dr: rec[p].d,
-      pts: 3 * rec[p].w + rec[p].d, played: rec[p].played, day2: md.day2 ? md.day2.has(p) : null, cut: md.cut ? md.cut.has(p) : null }))
+      pts: 3 * rec[p].w + rec[p].d, played: rec[p].played, day2: md.d2 ? md.d2.status[p] : null, cut: md.cut ? md.cut.has(p) : null }))
       .filter((r) => r.played);
     // each pairing's average: wins per match played by all of its pilots; a pilot's edge is wins above that pace
     const agg = md.decks.map(() => ({ w: 0, n: 0, pilots: [] }));
@@ -713,7 +754,8 @@
         { key: "pts", label: "Points", sortable: false },
         { key: "edge", label: "vs pairing", sortable: false, cell: (r) => (r.edge == null ? "—" : signed(r.edge, 1)), cls: (r) => (r.edge == null ? "muted" : r.edge >= 1.5 ? "good" : r.edge <= -1.5 ? "bad" : ""), help: "Wins above (or below) what this pairing's average player would have from the same number of matches." },
         { key: "prank", label: "On pairing", sortable: false, cell: (r) => (r.d === md.unknown ? "—" : `#${r.rank} of ${num(r.of)}`) },
-        { key: "day2", label: "Day 2", sortable: false, cell: (r) => (r.day2 == null ? "—" : r.day2 ? "Yes" : "") },
+        { key: "day2", label: "Day 2", sortable: false, help: md.d2 && md.d2.projected ? `Locked: already on ${md.d2.T}+ points. Alive: can still get there.` : null,
+          cell: (r) => (r.day2 == null ? "—" : r.day2 === "in" ? h("span", { class: "tag in" }, md.d2.projected ? "Locked" : "Yes") : r.day2 === "alive" ? h("span", { class: "tag alive" }, "Alive") : "") },
         { key: "cut", label: "Top cut", sortable: false, cell: (r) => (r.cut == null ? "—" : r.cut ? "Yes" : "") },
       ], shownRows)));
   }
