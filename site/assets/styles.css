@@ -281,3 +281,10 @@ svg.chart .ref { stroke: var(--muted); stroke-dasharray: 4 4; }
 .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px; }
 .tag.in { background: color-mix(in srgb, var(--good) 20%, transparent); color: var(--good); }
 .tag.alive { background: var(--accent-soft); color: var(--accent); }
+/* player run */
+a.plink { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+a.plink:hover { color: var(--accent); border-color: var(--accent); }
+.run-find { flex: 1 1 320px; max-width: 420px; }
+.run-head { display: flex; flex-direction: column; gap: 14px; }
+.run-head > div:first-child { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; }
+.res { font-weight: 700; }

@@ -8,7 +8,7 @@
   const INKS = ["amber", "amethyst", "emerald", "ruby", "sapphire", "steel"];
   const TABS = [
     ["overview", "Overview"], ["matchups", "Matchups"], ["conversion", "Conversion"],
-    ["rounds", "Round by round"], ["duels", "vs Duels"], ["players", "Players"],
+    ["rounds", "Round by round"], ["duels", "vs Duels"], ["players", "Players"], ["run", "Player run"],
   ];
   const app = document.getElementById("app");
   const picker = document.getElementById("event-picker");
@@ -748,7 +748,7 @@
       h("p", { class: "note" }, `Records from every reported match, byes counted as wins. ★ marks a standout pilot. Showing ${num(shownRows.length)} of ${num(rows.length)}; search to find anyone else. Names are as shown on the public event page.`),
       h("div", { class: "panel" }, table("players", [
         { key: "rank", label: "#", sortable: false, cell: (r) => String(shownRows.indexOf(r) + 1) },
-        { key: "name", label: "Player", align: "l", sortable: false, cell: (r) => (starred.has(r.p) ? h("span", null, h("span", { class: "star", "aria-label": "Standout pilot" }, "★ "), r.name) : r.name) },
+        { key: "name", label: "Player", align: "l", sortable: false, cell: (r) => h("span", null, starred.has(r.p) ? h("span", { class: "star", "aria-label": "Standout pilot" }, "★ ") : null, playerLink(md, r.p)) },
         { key: "deck", label: "Pairing", align: "l", sortable: false, cell: (r) => deckChip(r.deck) },
         { key: "rec", label: "W–L–D", sortable: false, cell: (r) => `${r.w}–${r.l}–${r.dr}` },
         { key: "pts", label: "Points", sortable: false },
@@ -758,6 +758,69 @@
           cell: (r) => (r.day2 == null ? "—" : r.day2 === "in" ? h("span", { class: "tag in" }, md.d2.projected ? "Locked" : "Yes") : r.day2 === "alive" ? h("span", { class: "tag alive" }, "Alive") : "") },
         { key: "cut", label: "Top cut", sortable: false, cell: (r) => (r.cut == null ? "—" : r.cut ? "Yes" : "") },
       ], shownRows)));
+  }
+
+  // ---- one player's run
+  const playerName = (md, p) => md.data.players[p][0] || "Player";
+  const playerLink = (md, p) => h("a", { class: "plink", href: `#/e/${md.meta.slug}/run?p=${p}` }, playerName(md, p));
+  const roundLabel = (ph, r) => (ph === 1 ? `Round ${r}` : ph === 2 ? `Day 2 · R${r}` : `Top cut · R${r}`);
+  function viewRun(md, q) {
+    const rec = md.recordsThrough(99, 99);
+    const p = q.p != null && q.p !== "" ? Number(q.p) : null;
+    const seen = md.data.players.map((x, i) => i).filter((i) => rec[i].played);
+    const list = h("datalist", { id: "run-names" }, seen.map((i) => h("option", { value: playerName(md, i) })));
+    const pick = (name) => {
+      const lower = name.trim().toLowerCase();
+      const hit = seen.find((i) => playerName(md, i).toLowerCase() === lower) ?? seen.find((i) => playerName(md, i).toLowerCase().includes(lower));
+      if (hit != null) setQ({ p: String(hit) });
+    };
+    const search = h("div", { class: "controls" }, h("label", { class: "ctl-group run-find" }, h("span", null, "Find a player"),
+      h("input", { class: "ctl", type: "search", list: "run-names", placeholder: "Type a name", value: p != null ? playerName(md, p) : "",
+        onchange: (e) => pick(e.target.value), onkeydown: (e) => { if (e.key === "Enter") pick(e.target.value); } })), list);
+    if (p == null || !md.data.players[p]) {
+      return h("div", { class: "section" }, search,
+        h("p", { class: "note" }, "Pick a player to see every match they played: who they faced, the opponent's ink pairing and record, the result and the games. Player names on the Players tab open here too."));
+    }
+    const d = md.deckOf[p];
+    const r = rec[p];
+    const matches = md.M.filter((m) => m[2] === p || m[3] === p).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    let w = 0, l = 0, dr = 0;
+    const rows = matches.map((m) => {
+      const me = m[2] === p, opp = me ? m[3] : m[2];
+      let res, cls, games = "";
+      if (m[4] === 3) { res = "Bye"; cls = "good"; w++; }
+      else if (m[4] === -1) { res = "In progress"; cls = "muted"; }
+      else if (m[4] === 0) { res = "Draw"; cls = "muted"; dr++; }
+      else {
+        const won = (m[4] === 1) === me;
+        res = won ? "Win" : "Loss"; cls = won ? "good" : "bad";
+        if (won) w++; else l++;
+        games = won ? `${m[5]}–${m[6]}` : `${m[6]}–${m[5]}`;
+      }
+      return { m, opp, res, cls, games, after: m[4] === -1 ? "" : `${w}–${l}${dr ? "–" + dr : ""}` };
+    });
+    const status = md.d2 ? md.d2.status[p] : null;
+    const kpi = (v, label) => h("div", { class: "kpi" }, h("b", null, v), h("span", null, label));
+    const oppWins = rows.filter((x) => x.opp >= 0).map((x) => rec[x.opp]);
+    const omw = oppWins.length ? 100 * oppWins.reduce((a, o) => a + (o.played ? Math.max(1 / 3, o.w / o.played) : 0), 0) / oppWins.length : null;
+    return h("div", { class: "section" }, search,
+      h("section", { class: "panel run-head" },
+        h("div", null, h("h2", null, playerName(md, p)), deckChip(md.decks[d])),
+        h("div", { class: "kpis" },
+          kpi(`${r.w}–${r.l}${r.d ? "–" + r.d : ""}`, "Record"), kpi(String(3 * r.w + r.d), "Points"),
+          omw != null ? kpi(pct(omw, 0), "Opponents' win %") : null,
+          status ? kpi(status === "in" ? (md.d2.projected ? "Locked" : "Yes") : status === "alive" ? "Alive" : "No", "Day 2") : null,
+          md.cut ? kpi(md.cut.has(p) ? "Yes" : "No", "Top cut") : null)),
+      h("div", { class: "panel" }, table("run", [
+        { key: "round", label: "Round", align: "l", sortable: false, cell: (x) => roundLabel(x.m[0], x.m[1]) },
+        { key: "opp", label: "Opponent", align: "l", sortable: false, cell: (x) => (x.opp < 0 ? h("span", { class: "muted" }, "—") : playerLink(md, x.opp)) },
+        { key: "odeck", label: "Their pairing", align: "l", sortable: false, cell: (x) => (x.opp < 0 ? "" : deckChip(md.decks[md.deckOf[x.opp]])) },
+        { key: "orec", label: "Their record", sortable: false, cell: (x) => (x.opp < 0 ? "" : `${rec[x.opp].w}–${rec[x.opp].l}${rec[x.opp].d ? "–" + rec[x.opp].d : ""}`) },
+        { key: "res", label: "Result", sortable: false, cell: (x) => h("span", { class: `res ${x.cls}` }, x.res) },
+        { key: "games", label: "Games", sortable: false, cell: (x) => x.games },
+        { key: "after", label: "Record after", sortable: false, cell: (x) => x.after },
+      ], rows)),
+      h("p", { class: "note" }, "Their record is the opponent's whole event so far. Opponents' win % uses the usual one-third floor for each opponent."));
   }
 
   // ------------------------------------------------------------ render
@@ -775,7 +838,7 @@
       if (!cache.has(r.slug)) app.replaceChildren(h("div", { class: "empty" }, "Loading event…"));
       const md = await loadEvent(r.slug);
       document.title = `${md.meta.name} · Lorcana Meta`;
-      const views = { overview: viewOverview, matchups: viewMatchups, conversion: viewConversion, rounds: viewRounds, duels: viewDuels, players: viewPlayers };
+      const views = { overview: viewOverview, matchups: viewMatchups, conversion: viewConversion, rounds: viewRounds, duels: viewDuels, players: viewPlayers, run: viewRun };
       const view = views[r.tab] || viewOverview;
       const scroll = window.scrollY;
       app.replaceChildren(eventHeader(md, r.tab), md.M.length ? view(md, r.q) : h("div", { class: "empty" }, "No pairings yet. This page fills in once round 1 is paired."));
