@@ -1,5 +1,5 @@
 {
- "at": "2026-11-13T17:29:56Z",
+ "at": "2026-11-14T13:37:19Z",
  "events": [
   {
    "id": 1254364,
@@ -13,24 +13,32 @@
    "id": 1250386,
    "name": "2026-2027 Season of Villainy - BRISBANE - Challenge Championship Qualifier",
    "start": "2026-11-13T22:00:00+00:00",
-   "players": 170,
+   "players": 166,
    "format": "Core Constructed",
    "pairings_visible": true
   },
   {
-   "id": 1250386,
-   "name": "2026-2027 Season of Villainy - BRISBANE - Challenge Championship Qualifier",
-   "start": "2026-11-13T22:00:00+00:00",
-   "players": 170,
+   "id": 1256609,
+   "name": "Saturday 09:00 - Villain Challenge: Gaston",
+   "start": "2026-11-14T09:00:00+00:00",
+   "players": 544,
    "format": "Core Constructed",
-   "pairings_visible": true
+   "pairings_visible": false
   },
   {
    "id": 1254365,
    "name": "DLC London: Main Event 2",
    "start": "2026-11-14T09:00:00+00:00",
-   "players": 338,
+   "players": 345,
    "format": "Core Constructed",
+   "pairings_visible": true
+  },
+  {
+   "id": 1256351,
+   "name": "DLC London: Challenge Championship Qualifier",
+   "start": "2026-11-14T09:00:00+00:00",
+   "players": 170,
+   "format": "Infinity Constructed",
    "pairings_visible": true
   },
   {
