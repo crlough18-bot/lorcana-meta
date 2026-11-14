@@ -48,14 +48,14 @@
     {
      "id": 1583534,
      "round": 5,
-     "status": "IN_PROGRESS",
+     "status": "COMPLETE",
      "paired": true
     },
     {
      "id": 1583535,
      "round": 6,
-     "status": "UPCOMING",
-     "paired": false
+     "status": "IN_PROGRESS",
+     "paired": true
     },
     {
      "id": 1583536,
@@ -80,5 +80,5 @@
    "rounds": []
   }
  ],
- "fetched_at": "2026-11-14T15:27:55Z"
+ "fetched_at": "2026-11-14T15:43:02Z"
 }
