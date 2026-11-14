@@ -17,7 +17,7 @@
   {
    "order": 1,
    "type": "SWISS",
-   "status": "IN_PROGRESS",
+   "status": "COMPLETE",
    "rounds_planned": 8,
    "best_of": 3,
    "rounds": [
@@ -66,7 +66,7 @@
     {
      "id": 1582178,
      "round": 8,
-     "status": "IN_PROGRESS",
+     "status": "COMPLETE",
      "paired": true
     }
    ]
@@ -74,10 +74,53 @@
   {
    "order": 2,
    "type": "SWISS",
-   "status": "UPCOMING",
+   "status": "IN_PROGRESS",
    "rounds_planned": 7,
    "best_of": 3,
-   "rounds": []
+   "rounds": [
+    {
+     "id": 1583477,
+     "round": 9,
+     "status": "IN_PROGRESS",
+     "paired": true
+    },
+    {
+     "id": 1583478,
+     "round": 10,
+     "status": "UPCOMING",
+     "paired": false
+    },
+    {
+     "id": 1583479,
+     "round": 11,
+     "status": "UPCOMING",
+     "paired": false
+    },
+    {
+     "id": 1583480,
+     "round": 12,
+     "status": "UPCOMING",
+     "paired": false
+    },
+    {
+     "id": 1583481,
+     "round": 13,
+     "status": "UPCOMING",
+     "paired": false
+    },
+    {
+     "id": 1583482,
+     "round": 14,
+     "status": "UPCOMING",
+     "paired": false
+    },
+    {
+     "id": 1583483,
+     "round": 15,
+     "status": "UPCOMING",
+     "paired": false
+    }
+   ]
   },
   {
    "order": 3,
@@ -88,5 +131,5 @@
    "rounds": []
   }
  ],
- "fetched_at": "2026-11-13T20:43:01Z"
+ "fetched_at": "2026-11-14T08:57:50Z"
 }

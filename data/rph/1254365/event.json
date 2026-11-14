@@ -4,7 +4,7 @@
  "start": "2026-11-14T09:00:00+00:00",
  "end": "2026-11-14T20:00:00+00:00",
  "timezone": "Europe/London",
- "display_status": "upcoming",
+ "display_status": "inProgress",
  "players": 345,
  "format": "Core Constructed",
  "family": "core",
@@ -17,10 +17,59 @@
   {
    "order": 1,
    "type": "SWISS",
-   "status": "UPCOMING",
+   "status": "IN_PROGRESS",
    "rounds_planned": 8,
    "best_of": 3,
-   "rounds": []
+   "rounds": [
+    {
+     "id": 1583530,
+     "round": 1,
+     "status": "IN_PROGRESS",
+     "paired": true
+    },
+    {
+     "id": 1583531,
+     "round": 2,
+     "status": "UPCOMING",
+     "paired": false
+    },
+    {
+     "id": 1583532,
+     "round": 3,
+     "status": "UPCOMING",
+     "paired": false
+    },
+    {
+     "id": 1583533,
+     "round": 4,
+     "status": "UPCOMING",
+     "paired": false
+    },
+    {
+     "id": 1583534,
+     "round": 5,
+     "status": "UPCOMING",
+     "paired": false
+    },
+    {
+     "id": 1583535,
+     "round": 6,
+     "status": "UPCOMING",
+     "paired": false
+    },
+    {
+     "id": 1583536,
+     "round": 7,
+     "status": "UPCOMING",
+     "paired": false
+    },
+    {
+     "id": 1583537,
+     "round": 8,
+     "status": "UPCOMING",
+     "paired": false
+    }
+   ]
   },
   {
    "order": 2,
@@ -31,5 +80,5 @@
    "rounds": []
   }
  ],
- "fetched_at": null
+ "fetched_at": "2026-11-14T08:57:54Z"
 }
